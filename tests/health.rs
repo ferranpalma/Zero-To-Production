@@ -1,3 +1,4 @@
+use rstest::*;
 use std::net::TcpListener;
 
 #[actix_web::test]
@@ -14,6 +15,50 @@ async fn test_health_endpoint() {
 
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
+}
+
+#[actix_web::test]
+async fn test_valid_form_returns_200() {
+    let address = spawn_app();
+
+    let client = reqwest::Client::new();
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let response = client
+        .post(format!("{}/subscriptions", &address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status().as_u16(), 200);
+}
+
+#[rstest]
+#[case("", "missing name and email")]
+#[case("name=le%20guin", "missing email")]
+#[case("email=ursula_le_guin%40gmail.com", "missing name")]
+#[actix_web::test]
+async fn test_invalid_form_returns_400(#[case] body: String, #[case] error: String) {
+    let address = spawn_app();
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(format!("{}/subscriptions", &address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body.clone())
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(
+        response.status().as_u16(),
+        400,
+        "The API did not fail with 400 error when the payload was {}",
+        error
+    );
 }
 
 fn spawn_app() -> String {
