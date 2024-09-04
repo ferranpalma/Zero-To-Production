@@ -65,7 +65,7 @@ fn spawn_app() -> String {
     let tcp_socket = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let binded_port = tcp_socket.local_addr().unwrap().port();
 
-    let server = rust_zero2prod::run(tcp_socket).expect("Failed to bind address");
+    let server = rust_zero2prod::startup::run(tcp_socket).expect("Failed to bind address");
     let _ = tokio::spawn(server);
 
     format!("http://127.0.0.1:{}", binded_port)
