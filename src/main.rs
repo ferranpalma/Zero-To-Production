@@ -1,9 +1,12 @@
-use rust_zero2prod::startup;
+use rust_zero2prod::{configuration, startup};
 use std::net::TcpListener;
 
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
-    let tcp_socket = TcpListener::bind("127.0.0.1:8000").expect("Failed to bind to port 8000");
+    let configuration = configuration::get_configuration().expect("Failed to read configuration");
+
+    let address = format!("127.0.0.1:{}", configuration.port);
+    let tcp_socket = TcpListener::bind(address)?;
 
     startup::run(tcp_socket)?.await
 }
