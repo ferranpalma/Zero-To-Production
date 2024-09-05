@@ -12,16 +12,18 @@ async fn main() -> Result<(), std::io::Error> {
         telemetry::get_tracing_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     telemetry::init_tracing_subscriber(tracing_subsriber);
 
-    let db_connection_pool = PgPool::connect(
+    let db_connection_pool = PgPool::connect_lazy(
         configuration
             .database
             .get_connection_string()
             .expose_secret(),
     )
-    .await
     .expect("Failed to connect to Postgres");
 
-    let address = format!("127.0.0.1:{}", configuration.port);
+    let address = format!(
+        "{}:{}",
+        configuration.application.host, configuration.application.port
+    );
     let tcp_socket = TcpListener::bind(address)?;
 
     startup::run(tcp_socket, db_connection_pool)?.await?;
