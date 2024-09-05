@@ -1,4 +1,3 @@
-use actix_web::http::header::Preference;
 use secrecy::{ExposeSecret, SecretString};
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
@@ -59,13 +58,19 @@ impl TryFrom<String> for Environment {
 
 impl DatabaseSettings {
     pub fn get_connect_options(&self) -> PgConnectOptions {
+        let ssl_mode = if self.ssl {
+            PgSslMode::Require
+        } else {
+            PgSslMode::Prefer
+        };
+
         PgConnectOptions::new()
             .host(&self.host)
             .username(&self.username)
             .password(self.password.expose_secret())
             .port(self.port)
-            .ssl_mode(PgSslMode::Require)
             .database(&self.name)
+            .ssl_mode(ssl_mode)
     }
 
     // Allows to connect to the postgres instance and create a new logical database each time a
