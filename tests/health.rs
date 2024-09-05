@@ -1,8 +1,33 @@
+use once_cell::sync::Lazy;
 use rstest::*;
-use rust_zero2prod::configuration;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
+
+use rust_zero2prod::{configuration, telemetry};
+
+// The tracing stack is only initialised once
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let tracing_subscriber_default_filter_level = "debug".into();
+    let tracing_subscriber_name = "test".into();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let tracing_subscriber = telemetry::get_tracing_subscriber(
+            tracing_subscriber_name,
+            tracing_subscriber_default_filter_level,
+            std::io::stdout,
+        );
+        telemetry::init_tracing_subscriber(tracing_subscriber);
+    } else {
+        let tracing_subscriber = telemetry::get_tracing_subscriber(
+            tracing_subscriber_name,
+            tracing_subscriber_default_filter_level,
+            std::io::sink,
+        );
+        telemetry::init_tracing_subscriber(tracing_subscriber);
+    }
+});
 
 #[actix_web::test]
 async fn test_health_endpoint() {
@@ -21,7 +46,7 @@ async fn test_health_endpoint() {
 }
 
 #[actix_web::test]
-async fn test_valid_form_returns_200() {
+async fn test_valid_form_returns_201() {
     let app = spawn_app().await;
 
     let client = reqwest::Client::new();
@@ -35,7 +60,7 @@ async fn test_valid_form_returns_200() {
         .await
         .expect("Failed to execute request");
 
-    assert_eq!(response.status().as_u16(), 200);
+    assert_eq!(response.status().as_u16(), 201);
 
     let database_subscriptor = sqlx::query!("SELECT email, name FROM subscriptions",)
         .fetch_one(&app.db_connection_pool)
@@ -78,6 +103,8 @@ pub struct TestingApp {
 }
 
 async fn spawn_app() -> TestingApp {
+    Lazy::force(&TRACING);
+
     let tcp_socket = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let binded_port = tcp_socket.local_addr().unwrap().port();
     let server_address = format!("http://127.0.0.1:{}", binded_port);
@@ -100,19 +127,23 @@ async fn spawn_app() -> TestingApp {
 }
 
 async fn create_testing_database(db_configuration: &configuration::DatabaseSettings) -> PgPool {
-    let mut db_connection =
-        PgConnection::connect(&db_configuration.get_connection_string_without_db())
-            .await
-            .expect("Failed to connect to Postgres.");
+    let mut db_connection = PgConnection::connect(
+        db_configuration
+            .get_connection_string_without_db()
+            .expose_secret(),
+    )
+    .await
+    .expect("Failed to connect to Postgres.");
 
     db_connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, db_configuration.name).as_str())
         .await
         .expect("Failed to create testing database");
 
-    let db_connection_pool = PgPool::connect(&db_configuration.get_connection_string())
-        .await
-        .expect("Failed to connect to Postgres database");
+    let db_connection_pool =
+        PgPool::connect(db_configuration.get_connection_string().expose_secret())
+            .await
+            .expect("Failed to connect to Postgres database");
 
     sqlx::migrate!("./migrations")
         .run(&db_connection_pool)
