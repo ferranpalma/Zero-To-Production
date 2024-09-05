@@ -1,11 +1,13 @@
 use once_cell::sync::Lazy;
 use rstest::*;
-use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 
-use rust_zero2prod::{configuration, telemetry};
+use rust_zero2prod::{
+    configuration::{self, DatabaseSettings},
+    telemetry,
+};
 
 // The tracing stack is only initialised once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -126,24 +128,20 @@ async fn spawn_app() -> TestingApp {
     }
 }
 
-async fn create_testing_database(db_configuration: &configuration::DatabaseSettings) -> PgPool {
-    let mut db_connection = PgConnection::connect(
-        db_configuration
-            .get_connection_string_without_db()
-            .expose_secret(),
-    )
-    .await
-    .expect("Failed to connect to Postgres.");
+async fn create_testing_database(db_configuration: &DatabaseSettings) -> PgPool {
+    let mut db_connection =
+        PgConnection::connect_with(&db_configuration.get_testing_connect_options())
+            .await
+            .expect("Failed to connect to Postgres.");
 
     db_connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, db_configuration.name).as_str())
         .await
         .expect("Failed to create testing database");
 
-    let db_connection_pool =
-        PgPool::connect(db_configuration.get_connection_string().expose_secret())
-            .await
-            .expect("Failed to connect to Postgres database");
+    let db_connection_pool = PgPool::connect_with(db_configuration.get_connect_options())
+        .await
+        .expect("Failed to connect to Postgres database");
 
     sqlx::migrate!("./migrations")
         .run(&db_connection_pool)

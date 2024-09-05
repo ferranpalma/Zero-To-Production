@@ -1,5 +1,4 @@
-use secrecy::ExposeSecret;
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
 
 use rust_zero2prod::{configuration, startup, telemetry};
@@ -12,13 +11,8 @@ async fn main() -> Result<(), std::io::Error> {
         telemetry::get_tracing_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     telemetry::init_tracing_subscriber(tracing_subsriber);
 
-    let db_connection_pool = PgPool::connect_lazy(
-        configuration
-            .database
-            .get_connection_string()
-            .expose_secret(),
-    )
-    .expect("Failed to connect to Postgres");
+    let db_connection_pool =
+        PgPoolOptions::new().connect_lazy_with(configuration.database.get_connect_options());
 
     let address = format!(
         "{}:{}",
