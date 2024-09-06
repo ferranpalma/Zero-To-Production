@@ -6,16 +6,8 @@ use super::helpers::spawn_app;
 async fn test_valid_form_returns_201() {
     let app = spawn_app().await;
 
-    let client = reqwest::Client::new();
-
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = client
-        .post(format!("{}/subscriptions", &app.server_address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = app.send_subscription_request(body.into()).await;
 
     assert_eq!(response.status().as_u16(), 201);
 
@@ -36,15 +28,7 @@ async fn test_valid_form_returns_201() {
 async fn test_form_with_missing_data_returns_400(#[case] body: String, #[case] error: String) {
     let app = spawn_app().await;
 
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("{}/subscriptions", &app.server_address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body.clone())
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = app.send_subscription_request(body).await;
 
     assert_eq!(
         response.status().as_u16(),
@@ -63,15 +47,7 @@ async fn test_form_with_missing_data_returns_400(#[case] body: String, #[case] e
 async fn test_form_with_invalid_data_returns_400(#[case] body: String, #[case] error: String) {
     let app = spawn_app().await;
 
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("{}/subscriptions", &app.server_address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body.clone())
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = app.send_subscription_request(body).await;
 
     assert_eq!(
         response.status().as_u16(),
