@@ -22,7 +22,7 @@ struct EmailRequestBody<'a> {
 
 impl EmailClient {
     pub fn new(
-        base_url: String,
+        base_url: &str,
         sender: SubscriberEmail,
         api_token: SecretString,
         timeout: std::time::Duration,
@@ -32,7 +32,7 @@ impl EmailClient {
                 .timeout(timeout)
                 .build()
                 .expect("Failed to build HTTP client for email client."),
-            base_url: Url::parse(&base_url).expect("Failed to parse email client's base url"),
+            base_url: Url::parse(base_url).expect("Failed to parse email client's base url"),
             sender,
             api_token,
         }
@@ -98,7 +98,7 @@ mod tests {
     }
     fn get_email_client(base_url: String) -> EmailClient {
         EmailClient::new(
-            base_url,
+            &base_url,
             get_email_address(),
             Secret::new(Faker.fake()),
             std::time::Duration::from_millis(200),

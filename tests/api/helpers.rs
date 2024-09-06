@@ -1,11 +1,10 @@
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 
 use rust_zero2prod::{
     configuration::{self, DatabaseSettings},
-    email_client::EmailClient,
+    startup::{get_db_connection_pool, Application},
     telemetry,
 };
 
@@ -39,32 +38,24 @@ pub struct TestingApp {
 pub async fn spawn_app() -> TestingApp {
     Lazy::force(&TRACING);
 
-    let tcp_socket = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
-    let binded_port = tcp_socket.local_addr().unwrap().port();
-    let server_address = format!("http://127.0.0.1:{}", binded_port);
-
+    // Randomize configuration values so all tests are executed in isolation
     let mut configuration =
         configuration::get_configuration().expect("Failed to read configuration");
     configuration.database.name = Uuid::new_v4().to_string();
+    configuration.application.port = 0;
 
-    let db_connection_pool = create_testing_database(&configuration.database).await;
+    create_testing_database(&configuration.database).await;
 
-    let timeout = configuration.email_client.get_timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        configuration.email_client.sender_email,
-        configuration.email_client.api_token,
-        timeout,
-    );
+    let application = Application::build_server(&configuration)
+        .await
+        .expect("Failed to build application.");
+    let server_address = format!("http://127.0.0.1:{}", application.get_port());
 
-    let server = rust_zero2prod::startup::run(tcp_socket, db_connection_pool.clone(), email_client)
-        .expect("Failed to bind address");
-
-    let _ = tokio::spawn(server);
+    let _ = tokio::spawn(application.run_server());
 
     TestingApp {
+        db_connection_pool: get_db_connection_pool(&configuration.database),
         server_address,
-        db_connection_pool,
     }
 }
 

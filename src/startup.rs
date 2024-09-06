@@ -4,12 +4,53 @@ use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
 use crate::{
-    configuration::Settings,
+    configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
     routes::{health_check, subscribe},
 };
 
-pub fn run(
+pub struct Application {
+    port: u16,
+    server: Server,
+}
+
+impl Application {
+    pub async fn build_server(configuration: &Settings) -> Result<Application, std::io::Error> {
+        let db_connection_pool = get_db_connection_pool(&configuration.database);
+
+        let email_client_timeout = configuration.email_client.get_timeout();
+        let email_client = EmailClient::new(
+            &configuration.email_client.base_url,
+            configuration.email_client.sender_email.clone(),
+            configuration.email_client.api_token.clone(),
+            email_client_timeout,
+        );
+
+        let server_address = format!(
+            "{}:{}",
+            configuration.application.host, configuration.application.port
+        );
+        let server_tcp_socket = TcpListener::bind(server_address)?;
+        let server_port = server_tcp_socket.local_addr().unwrap().port();
+
+        let server = run(server_tcp_socket, db_connection_pool, email_client)?;
+
+        Ok(Self {
+            port: server_port,
+            server,
+        })
+    }
+
+    pub fn get_port(&self) -> u16 {
+        self.port
+    }
+
+    pub async fn run_server(self) -> Result<(), std::io::Error> {
+        self.server.await
+    }
+}
+
+fn run(
     tcp_socket: TcpListener,
     db_connection_pool: PgPool,
     email_client: EmailClient,
@@ -30,23 +71,6 @@ pub fn run(
     Ok(server)
 }
 
-pub async fn build_server(configuration: Settings) -> Result<Server, std::io::Error> {
-    let db_connection_pool =
-        PgPoolOptions::new().connect_lazy_with(configuration.database.get_connect_options());
-
-    let email_client_timeout = configuration.email_client.get_timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        configuration.email_client.sender_email,
-        configuration.email_client.api_token,
-        email_client_timeout,
-    );
-
-    let server_address = format!(
-        "{}:{}",
-        configuration.application.host, configuration.application.port
-    );
-    let server_tcp_socket = TcpListener::bind(server_address)?;
-
-    run(server_tcp_socket, db_connection_pool, email_client)
+pub fn get_db_connection_pool(db_settings: &DatabaseSettings) -> PgPool {
+    PgPoolOptions::new().connect_lazy_with(db_settings.get_connect_options())
 }
