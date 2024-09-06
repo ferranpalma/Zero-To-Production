@@ -78,7 +78,34 @@ async fn test_valid_form_returns_201() {
 #[case("name=le%20guin", "missing email")]
 #[case("email=ursula_le_guin%40gmail.com", "missing name")]
 #[actix_web::test]
-async fn test_invalid_form_returns_400(#[case] body: String, #[case] error: String) {
+async fn test_form_with_missing_data_returns_400(#[case] body: String, #[case] error: String) {
+    let app = spawn_app().await;
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(format!("{}/subscriptions", &app.server_address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body.clone())
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(
+        response.status().as_u16(),
+        400,
+        "The API did not fail with 400 error when the payload was {}",
+        error
+    );
+}
+
+#[rstest]
+#[case("name=&email=", "empty name and email")]
+#[case("name=&email=ursula_le_guin%40gmail.com", "empty name")]
+#[case("name=Ursula&email=", "empty email")]
+#[case("name=ursula&email=definitely-not-an-email", "empty name and email")]
+#[actix_web::test]
+async fn test_form_with_invalid_data_returns_400(#[case] body: String, #[case] error: String) {
     let app = spawn_app().await;
 
     let client = reqwest::Client::new();

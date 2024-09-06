@@ -4,6 +4,8 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::models::{NewSubscriber, SubscriberEmail, SubscriberName};
+
 #[derive(Deserialize)]
 struct SubscriberData {
     email: String,
@@ -23,7 +25,19 @@ pub async fn subscribe(
     subscriber_data: web::Form<SubscriberData>,
     db_connection_pool: web::Data<PgPool>,
 ) -> HttpResponse {
-    match insert_subscriber_into_database(&db_connection_pool, &subscriber_data).await {
+    let name = match SubscriberName::parse(subscriber_data.0.name) {
+        Ok(name) => name,
+        Err(_) => return HttpResponse::BadRequest().finish(),
+    };
+
+    let email = match SubscriberEmail::parse(subscriber_data.0.email) {
+        Ok(email) => email,
+        Err(_) => return HttpResponse::BadRequest().finish(),
+    };
+
+    let new_subscriber = NewSubscriber { email, name };
+
+    match insert_subscriber_into_database(&db_connection_pool, &new_subscriber).await {
         Ok(_) => HttpResponse::Created().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
@@ -35,7 +49,7 @@ pub async fn subscribe(
 )]
 async fn insert_subscriber_into_database(
     db_connection_pool: &PgPool,
-    subscriber_data: &SubscriberData,
+    subscriber_data: &NewSubscriber,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
@@ -43,8 +57,8 @@ async fn insert_subscriber_into_database(
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        subscriber_data.email,
-        subscriber_data.name,
+        subscriber_data.email.as_ref(),
+        subscriber_data.name.as_ref(),
         Utc::now()
     )
     .execute(db_connection_pool)
