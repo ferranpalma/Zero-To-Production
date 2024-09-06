@@ -46,7 +46,7 @@ pub async fn spawn_app() -> TestingApp {
 
     create_testing_database(&configuration.database).await;
 
-    let application = Application::build_server(&configuration)
+    let application = Application::build_application(&configuration)
         .await
         .expect("Failed to build application.");
     let server_address = format!("http://127.0.0.1:{}", application.get_port());

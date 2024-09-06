@@ -8,7 +8,7 @@ async fn main() -> Result<(), std::io::Error> {
         telemetry::get_tracing_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     telemetry::init_tracing_subscriber(tracing_subsriber);
 
-    let server = startup::Application::build_server(&configuration).await?;
+    let server = startup::Application::build_application(&configuration).await?;
     server.run_server().await?;
 
     Ok(())
