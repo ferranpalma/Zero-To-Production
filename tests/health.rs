@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use rust_zero2prod::{
     configuration::{self, DatabaseSettings},
+    email_client::EmailClient,
     telemetry,
 };
 
@@ -144,7 +145,15 @@ async fn spawn_app() -> TestingApp {
 
     let db_connection_pool = create_testing_database(&configuration.database).await;
 
-    let server = rust_zero2prod::startup::run(tcp_socket, db_connection_pool.clone())
+    let timeout = configuration.email_client.get_timeout();
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        configuration.email_client.sender_email,
+        configuration.email_client.api_token,
+        timeout,
+    );
+
+    let server = rust_zero2prod::startup::run(tcp_socket, db_connection_pool.clone(), email_client)
         .expect("Failed to bind address");
 
     let _ = tokio::spawn(server);

@@ -6,3 +6,8 @@ database:
   username: "postgres"
   password: "password"
   name: "newsletter"
+email_client:
+  base_url: "http://localhost"
+  sender_email: "test@test.test"
+  api_token: "api-secret-token"
+  timeout_ms: 10000
