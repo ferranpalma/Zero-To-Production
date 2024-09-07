@@ -21,6 +21,21 @@ async fn test_valid_form_returns_201() {
     let response = app.send_subscription_request(body.into()).await;
 
     assert_eq!(response.status().as_u16(), 201);
+}
+
+#[actix_web::test]
+async fn test_valid_subscriber_is_persisted_in_database() {
+    let app = spawn_app().await;
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.mock_email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
 
     let database_subscriptor = sqlx::query!("SELECT email, name FROM subscriptions",)
         .fetch_one(&app.db_connection_pool)
