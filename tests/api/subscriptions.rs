@@ -18,9 +18,6 @@ async fn test_valid_form_returns_201() {
         .mount(&app.mock_email_server)
         .await;
 
-    // TODO: Seems like in the tests, send_email fails. However, spinning a local mockoon server
-    // and hitting /subscriptions returns a 201 and sends the actual email
-
     let response = app.send_subscription_request(body.into()).await;
 
     assert_eq!(response.status().as_u16(), 201);
@@ -40,8 +37,6 @@ async fn test_subscribe_with_valid_data_sends_confirmation_email() {
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
-    // TODO: Seems like in the tests, send_email fails. However, spinning a local mockoon server
-    // and hitting /subscriptions returns a 201 and sends the actual email
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
