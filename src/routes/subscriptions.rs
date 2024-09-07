@@ -31,8 +31,6 @@ pub async fn subscribe(
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
 
-    dbg!("New subscriber created");
-
     if insert_subscriber_into_database(&db_connection_pool, &new_subscriber)
         .await
         .is_err()
@@ -40,19 +38,39 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     };
 
-    dbg!("New subscriber in the database");
-
-    if email_client
-        .send_email(new_subscriber.email, "Welcome", "Welcome", "Welcome")
+    if send_confirmation_email(&email_client, new_subscriber)
         .await
         .is_err()
     {
         return HttpResponse::InternalServerError().finish();
-    }
-
-    dbg!("New subscriber mail sent");
+    };
 
     HttpResponse::Created().finish()
+}
+
+#[tracing::instrument(
+    name = "Send a confirmation email to a new subscriber",
+    skip(email_client, subscriber_data)
+)]
+async fn send_confirmation_email(
+    email_client: &EmailClient,
+    subscriber_data: NewSubscriber,
+) -> Result<(), reqwest::Error> {
+    let confirmation_link = "https://testdomain.com/subscriptions/confirm";
+
+    let plain_text_body = &format!(
+        "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
+        confirmation_link
+    );
+    let html_body = &format!(
+        "<p>Welcome to our newsletter!</p><br />\
+        <p>Click <a href=\"{}\">here</a> to confirm your subscription.</p>",
+        confirmation_link
+    );
+
+    email_client
+        .send_email(subscriber_data.email, "Welcome", html_body, plain_text_body)
+        .await
 }
 
 #[tracing::instrument(

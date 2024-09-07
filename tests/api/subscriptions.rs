@@ -47,6 +47,45 @@ async fn test_subscribe_with_valid_data_sends_confirmation_email() {
     app.send_subscription_request(body.into()).await;
 }
 
+#[actix_web::test]
+async fn test_subscribe_confirmation_email_contains_a_link() {
+    let app = spawn_app().await;
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.mock_email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
+
+    let email_server_first_request = &app
+        .mock_email_server
+        .received_requests()
+        .await
+        .expect("No received requests in the email server")
+        .first()
+        .cloned()
+        .expect("Unable to extract first email server request");
+    let request_body: serde_json::Value = serde_json::from_slice(&email_server_first_request.body)
+        .expect("Failed to get request body");
+
+    let get_link = |s: &str| {
+        let links: Vec<_> = linkify::LinkFinder::new()
+            .links(s)
+            .filter(|l| *l.kind() == linkify::LinkKind::Url)
+            .collect();
+        assert_eq!(links.len(), 1);
+        links.first().unwrap().as_str().to_owned()
+    };
+
+    let html_body_link = get_link(request_body["HtmlBody"].as_str().unwrap());
+    let text_body_link = get_link(request_body["TextBody"].as_str().unwrap());
+    assert_eq!(html_body_link, text_body_link);
+}
+
 #[rstest]
 #[case("", "missing name and email")]
 #[case("name=le%20guin", "missing email")]
