@@ -4,7 +4,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::NewSubscriber;
+use crate::{email_client::EmailClient, models::NewSubscriber};
 
 #[derive(Deserialize)]
 pub struct SubscriberData {
@@ -14,7 +14,7 @@ pub struct SubscriberData {
 
 #[tracing::instrument(
     name = "Add a new subscriber",
-    skip(subscriber_data, db_connection_pool),
+    skip(subscriber_data, db_connection_pool, email_client),
     fields(
         subscriber_name = %subscriber_data.name,
         subscriber_email = %subscriber_data.email,
@@ -24,16 +24,35 @@ pub struct SubscriberData {
 pub async fn subscribe(
     subscriber_data: web::Form<SubscriberData>,
     db_connection_pool: web::Data<PgPool>,
+    email_client: web::Data<EmailClient>,
 ) -> HttpResponse {
     let new_subscriber = match subscriber_data.0.try_into() {
         Ok(x) => x,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
 
-    match insert_subscriber_into_database(&db_connection_pool, &new_subscriber).await {
-        Ok(_) => HttpResponse::Created().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    dbg!("New subscriber created");
+
+    if insert_subscriber_into_database(&db_connection_pool, &new_subscriber)
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
+    };
+
+    dbg!("New subscriber in the database");
+
+    if email_client
+        .send_email(new_subscriber.email, "Welcome", "Welcome", "Welcome")
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
     }
+
+    dbg!("New subscriber mail sent");
+
+    HttpResponse::Created().finish()
 }
 
 #[tracing::instrument(
