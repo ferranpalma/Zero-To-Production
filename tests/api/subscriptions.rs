@@ -37,13 +37,14 @@ async fn test_valid_subscriber_is_persisted_in_database() {
 
     app.send_subscription_request(body.into()).await;
 
-    let database_subscriptor = sqlx::query!("SELECT email, name FROM subscriptions",)
+    let database_subscriptor = sqlx::query!("SELECT email, name, status FROM subscriptions",)
         .fetch_one(&app.db_connection_pool)
         .await
         .expect("Failed to fetch saved subscription");
 
     assert_eq!(database_subscriptor.email, "ursula_le_guin@gmail.com");
     assert_eq!(database_subscriptor.name, "le guin");
+    assert_eq!(database_subscriptor.status, "pending_confirmation");
 }
 
 #[actix_web::test]
