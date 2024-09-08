@@ -85,21 +85,12 @@ async fn test_subscribe_confirmation_email_contains_a_link() {
         .first()
         .cloned()
         .expect("Unable to extract first email server request");
-    let request_body: serde_json::Value = serde_json::from_slice(&email_server_first_request.body)
-        .expect("Failed to get request body");
+    let confirmation_links = app.get_email_confirmation_links(email_server_first_request);
 
-    let get_link = |s: &str| {
-        let links: Vec<_> = linkify::LinkFinder::new()
-            .links(s)
-            .filter(|l| *l.kind() == linkify::LinkKind::Url)
-            .collect();
-        assert_eq!(links.len(), 1);
-        links.first().unwrap().as_str().to_owned()
-    };
-
-    let html_body_link = get_link(request_body["HtmlBody"].as_str().unwrap());
-    let text_body_link = get_link(request_body["TextBody"].as_str().unwrap());
-    assert_eq!(html_body_link, text_body_link);
+    assert_eq!(
+        confirmation_links.html_link,
+        confirmation_links.plain_text_link
+    );
 }
 
 #[rstest]

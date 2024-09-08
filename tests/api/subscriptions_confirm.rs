@@ -1,4 +1,3 @@
-use reqwest::Url;
 use wiremock::{
     matchers::{method, path},
     Mock, ResponseTemplate,
@@ -27,25 +26,12 @@ async fn test_link_returned_by_subscribe_endpoint_returns_200() {
         .first()
         .cloned()
         .expect("Unable to extract first email server request");
-    let request_body: serde_json::Value = serde_json::from_slice(&email_server_first_request.body)
-        .expect("Failed to get request body");
+    let confirmation_links = app.get_email_confirmation_links(email_server_first_request);
 
-    let get_link = |s: &str| {
-        let links: Vec<_> = linkify::LinkFinder::new()
-            .links(s)
-            .filter(|l| *l.kind() == linkify::LinkKind::Url)
-            .collect();
-        assert_eq!(links.len(), 1);
-        links.first().unwrap().as_str().to_owned()
-    };
-    let raw_confirmation_link = &get_link(request_body["HtmlBody"].as_str().unwrap());
-    let mut confirmation_link = Url::parse(raw_confirmation_link).unwrap();
-    assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
-    confirmation_link.set_port(Some(app.server_port)).unwrap();
-
-    let confirm_endpoint_response = reqwest::get(confirmation_link)
+    let confirm_endpoint_response = reqwest::get(confirmation_links.html_link)
         .await
-        .expect("Failed to hit confirmation endpoint");
+        .expect("Failed to hit subscription confirmation endpoint");
+
     assert_eq!(confirm_endpoint_response.status().as_u16(), 200);
 }
 
