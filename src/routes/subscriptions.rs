@@ -4,7 +4,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{email_client::EmailClient, models::NewSubscriber};
+use crate::{email_client::EmailClient, models::NewSubscriber, startup::ApplicationBaseUrl};
 
 #[derive(Deserialize)]
 pub struct SubscriberData {
@@ -14,7 +14,7 @@ pub struct SubscriberData {
 
 #[tracing::instrument(
     name = "Add a new subscriber",
-    skip(subscriber_data, db_connection_pool, email_client),
+    skip(subscriber_data, db_connection_pool, email_client, application_base_url),
     fields(
         subscriber_name = %subscriber_data.name,
         subscriber_email = %subscriber_data.email,
@@ -25,6 +25,7 @@ pub async fn subscribe(
     subscriber_data: web::Form<SubscriberData>,
     db_connection_pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
+    application_base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
     let new_subscriber = match subscriber_data.0.try_into() {
         Ok(x) => x,
@@ -38,7 +39,7 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     };
 
-    if send_confirmation_email(&email_client, new_subscriber)
+    if send_confirmation_email(&email_client, new_subscriber, &application_base_url.0)
         .await
         .is_err()
     {
@@ -50,13 +51,17 @@ pub async fn subscribe(
 
 #[tracing::instrument(
     name = "Send a confirmation email to a new subscriber",
-    skip(email_client, subscriber_data)
+    skip(email_client, subscriber_data, application_base_url)
 )]
 async fn send_confirmation_email(
     email_client: &EmailClient,
     subscriber_data: NewSubscriber,
+    application_base_url: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = "https://testdomain.com/subscriptions/confirm";
+    let confirmation_link = format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        application_base_url, "my-temporal-token"
+    );
 
     let plain_text_body = &format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",

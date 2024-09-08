@@ -6,7 +6,7 @@ use tracing_actix_web::TracingLogger;
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
-    routes::{health_check, subscribe},
+    routes::{confirm_subscriber, health_check, subscribe},
 };
 
 pub struct Application {
@@ -14,6 +14,7 @@ pub struct Application {
     server: Server,
 }
 
+pub struct ApplicationBaseUrl(pub String);
 impl Application {
     pub async fn build_application(
         configuration: &Settings,
@@ -35,7 +36,12 @@ impl Application {
         let server_tcp_socket = TcpListener::bind(server_address)?;
         let server_port = server_tcp_socket.local_addr().unwrap().port();
 
-        let server = Self::build_http_server(server_tcp_socket, db_connection_pool, email_client)?;
+        let server = Self::build_http_server(
+            server_tcp_socket,
+            db_connection_pool,
+            email_client,
+            configuration.application.base_url.clone(),
+        )?;
 
         Ok(Self {
             port: server_port,
@@ -55,16 +61,20 @@ impl Application {
         tcp_socket: TcpListener,
         db_connection_pool: PgPool,
         email_client: EmailClient,
+        server_base_url: String,
     ) -> Result<Server, std::io::Error> {
         let db_connection_pool = web::Data::new(db_connection_pool);
         let http_email_client = web::Data::new(email_client);
+        let server_base_url = web::Data::new(ApplicationBaseUrl(server_base_url));
         let server = HttpServer::new(move || {
             App::new()
                 .wrap(TracingLogger::default())
                 .app_data(db_connection_pool.clone())
                 .app_data(http_email_client.clone())
+                .app_data(server_base_url.clone())
                 .service(health_check)
                 .service(subscribe)
+                .service(confirm_subscriber)
         })
         .listen(tcp_socket)?
         .run();
