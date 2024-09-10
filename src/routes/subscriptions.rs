@@ -1,11 +1,15 @@
 use actix_web::{post, web, HttpResponse};
+use askama_actix::Template;
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Deserialize;
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::{email_client::EmailClient, models::NewSubscriber, startup::ApplicationBaseUrl};
+use crate::{
+    email_client::EmailClient, models::NewSubscriber, startup::ApplicationBaseUrl,
+    templates::ConfirmationEmailTemplate,
+};
 
 #[derive(Deserialize)]
 pub struct SubscriberData {
@@ -140,14 +144,20 @@ async fn send_confirmation_email(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
         confirmation_link
     );
-    let html_body = &format!(
-        "<p>Welcome to our newsletter!</p><br />\
-        <p>Click <a href=\"{}\">here</a> to confirm your subscription.</p>",
-        confirmation_link
-    );
+    let html_body = ConfirmationEmailTemplate {
+        confirmation_link: &confirmation_link,
+    };
+    let html_body = html_body
+        .render()
+        .expect("Failed to render html for confirmation email");
 
     email_client
-        .send_email(subscriber_data.email, "Welcome", html_body, plain_text_body)
+        .send_email(
+            subscriber_data.email,
+            "Welcome",
+            &html_body,
+            plain_text_body,
+        )
         .await
 }
 
