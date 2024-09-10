@@ -93,6 +93,57 @@ async fn test_subscribe_confirmation_email_contains_a_link() {
     );
 }
 
+#[actix_web::test]
+async fn test_trying_to_subscribe_with_pending_confirmation_does_not_fail() {
+    let app = spawn_app().await;
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.mock_email_server)
+        .await;
+
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 201);
+
+    // Subscribe a second time without confirming
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 201);
+}
+
+#[actix_web::test]
+async fn test_trying_to_subscribe_with_confirmed_status_fails() {
+    let app = spawn_app().await;
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.mock_email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
+
+    let email_server_first_request = &app
+        .mock_email_server
+        .received_requests()
+        .await
+        .expect("No received requests in the email server")
+        .first()
+        .cloned()
+        .expect("Unable to extract first email server request");
+    let confirmation_links = app.get_email_confirmation_links(email_server_first_request);
+
+    reqwest::get(confirmation_links.html_link)
+        .await
+        .expect("Failed to hit subscription confirmation endpoint");
+
+    // Subscribe a second time once confirmed
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 500);
+}
+
 #[rstest]
 #[case("", "missing name and email")]
 #[case("name=le%20guin", "missing email")]

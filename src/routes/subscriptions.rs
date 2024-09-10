@@ -49,11 +49,16 @@ pub async fn subscribe(
         }
     };
 
-    let subscriber_id =
-        match insert_subscriber_into_database(&mut db_transaction, &new_subscriber).await {
-            Ok(subscriber_id) => subscriber_id,
-            Err(_) => return HttpResponse::InternalServerError().finish(),
-        };
+    let subscriber_id = match insert_subscriber_into_database(
+        &db_connection_pool,
+        &mut db_transaction,
+        &new_subscriber,
+    )
+    .await
+    {
+        Ok(subscriber_id) => subscriber_id,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
 
     let subscription_token = create_subscription_token();
     if store_subscription_token_into_database(
@@ -98,7 +103,8 @@ async fn store_subscription_token_into_database(
 ) -> Result<(), sqlx::Error> {
     let db_query = sqlx::query!(
         r#"INSERT INTO subscription_tokens (subscription_token, subscriber_id)
-        VALUES ($1, $2)"#,
+        VALUES ($1, $2)
+        "#,
         subscription_token,
         subscriber_id
     );
@@ -150,10 +156,22 @@ async fn send_confirmation_email(
     skip(db_transaction, subscriber_data)
 )]
 async fn insert_subscriber_into_database(
+    db_connection_pool: &PgPool,
     db_transaction: &mut Transaction<'_, Postgres>,
     subscriber_data: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
+
+    let subscriber = sqlx::query!(
+        r#"SELECT id FROM subscriptions WHERE email = $1 AND status = 'pending_confirmation'"#,
+        subscriber_data.email.as_ref()
+    )
+    .fetch_optional(db_connection_pool)
+    .await?;
+    if let Some(subscriber) = subscriber {
+        return Ok(subscriber.id);
+    }
+
     let db_query = sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
