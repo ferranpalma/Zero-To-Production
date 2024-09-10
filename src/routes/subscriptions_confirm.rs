@@ -2,9 +2,11 @@ use actix_web::{get, web, HttpResponse};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::models::SubscriptionToken;
+
 #[derive(serde::Deserialize)]
 pub struct QueryParameters {
-    subscription_token: String,
+    pub subscription_token: String,
 }
 
 #[tracing::instrument(name = "Confirm subscriber", skip(db_connection_pool, queryparams))]
@@ -13,10 +15,11 @@ pub async fn confirm_subscriber(
     db_connection_pool: web::Data<PgPool>,
     queryparams: web::Query<QueryParameters>,
 ) -> HttpResponse {
+    let subscription_token = SubscriptionToken::parse(queryparams.subscription_token.clone())
+        .expect("Failed to parse the token");
+
     let subscriber_id =
-        match get_subscriber_id_from_token(&db_connection_pool, &queryparams.subscription_token)
-            .await
-        {
+        match get_subscriber_id_from_token(&db_connection_pool, &subscription_token).await {
             Ok(id) => id,
             Err(_) => return HttpResponse::InternalServerError().finish(),
         };
@@ -63,11 +66,11 @@ async fn mark_subscriber_status_as_confirmed(
 )]
 async fn get_subscriber_id_from_token(
     db_connection_pool: &PgPool,
-    subscription_token: &str,
+    subscription_token: &SubscriptionToken,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let result = sqlx::query!(
         r#"SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = $1"#,
-        subscription_token
+        subscription_token.as_ref()
     )
     .fetch_optional(db_connection_pool)
     .await
