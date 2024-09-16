@@ -81,6 +81,34 @@ async fn test_confirmation_without_token_is_rejected() {
 }
 
 #[actix_web::test]
+async fn test_confirmation_with_invalid_token_is_rejected() {
+    let app = spawn_app().await;
+
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?token=invalid_token",
+        app.server_address
+    ))
+    .await
+    .expect("Failed to hit confirm endpoint");
+
+    assert_eq!(response.status().as_u16(), 400);
+}
+
+#[actix_web::test]
+async fn test_confirmation_with_non_existent_token_is_rejected() {
+    let app = spawn_app().await;
+
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?subscription_token=abcdefgHIJK0123456789mncd",
+        app.server_address
+    ))
+    .await
+    .expect("Failed to hit confirm endpoint");
+
+    assert_eq!(response.status().as_u16(), 401);
+}
+
+#[actix_web::test]
 async fn test_confirmation_endpoint_confirms_subscriber_in_database() {
     let app = spawn_app().await;
 

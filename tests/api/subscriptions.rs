@@ -180,3 +180,18 @@ async fn test_form_with_invalid_data_returns_400(#[case] body: String, #[case] e
         error
     );
 }
+
+#[actix_web::test]
+async fn test_database_error_causes_endpoint_to_return_500() {
+    let app = spawn_app().await;
+
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;")
+        .execute(&app.db_connection_pool)
+        .await
+        .expect("Failed to alter database table");
+
+    let response = app.send_subscription_request(body.into()).await;
+
+    assert_eq!(response.status().as_u16(), 500);
+}
