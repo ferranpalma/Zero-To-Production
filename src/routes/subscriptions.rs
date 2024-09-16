@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, post, web, HttpResponse, ResponseError};
+use actix_web::{post, web, HttpResponse};
 use anyhow::Context;
 use askama_actix::Template;
 use chrono::Utc;
@@ -8,7 +8,10 @@ use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    email_client::EmailClient, models::NewSubscriber, startup::ApplicationBaseUrl,
+    email_client::EmailClient,
+    errors::{StoreTokenError, SubscribeError},
+    models::NewSubscriber,
+    startup::ApplicationBaseUrl,
     templates::ConfirmationEmailTemplate,
 };
 
@@ -16,57 +19,6 @@ use crate::{
 pub struct SubscriberData {
     pub email: String,
     pub name: String,
-}
-
-#[derive(Debug)]
-pub struct StoreTokenError(sqlx::Error);
-
-impl std::error::Error for StoreTokenError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.0)
-    }
-}
-
-impl std::fmt::Display for StoreTokenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to store subscription token in the database")
-    }
-}
-
-fn format_error_chain(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}\n", e)?;
-    let mut current_error = e.source();
-    while let Some(cause) = current_error {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current_error = cause.source();
-    }
-    Ok(())
-}
-
-#[derive(thiserror::Error)]
-pub enum SubscribeError {
-    #[error("{0}")]
-    ValidationError(String),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl std::fmt::Debug for SubscribeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        format_error_chain(self, f)
-    }
-}
-
-impl ResponseError for SubscribeError {
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        match self {
-            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
 }
 
 fn create_subscription_token() -> String {
