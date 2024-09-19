@@ -39,7 +39,7 @@ impl EmailClient {
     }
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -140,7 +140,7 @@ mod tests {
 
         let _ = email_client
             .send_email(
-                get_email_address(),
+                &get_email_address(),
                 &get_email_subject(),
                 &get_email_content(),
                 &get_email_content(),
@@ -161,7 +161,7 @@ mod tests {
 
         let send_email_result = email_client
             .send_email(
-                get_email_address(),
+                &get_email_address(),
                 &get_email_subject(),
                 &get_email_content(),
                 &get_email_content(),
@@ -184,7 +184,7 @@ mod tests {
 
         let send_email_result = email_client
             .send_email(
-                get_email_address(),
+                &get_email_address(),
                 &get_email_subject(),
                 &get_email_content(),
                 &get_email_content(),
@@ -208,7 +208,7 @@ mod tests {
 
         let send_email_result = email_client
             .send_email(
-                get_email_address(),
+                &get_email_address(),
                 &get_email_subject(),
                 &get_email_content(),
                 &get_email_content(),

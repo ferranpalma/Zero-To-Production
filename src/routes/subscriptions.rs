@@ -137,7 +137,7 @@ async fn send_confirmation_email(
 
     email_client
         .send_email(
-            subscriber_data.email,
+            &subscriber_data.email,
             "Welcome",
             &html_body,
             plain_text_body,
